@@ -11,3 +11,12 @@ This folder contains the final sanitized configurations for all five Cisco IOSv 
 - LON-BR-CE1
 
 > Admin credentials and authentication keys have been removed or replaced with placeholders before publication.
+## Lab Access
+
+The lab includes a low-privilege test account for SSH verification:
+
+- Username: `test`
+- Password: `ReadQOS!!!`
+- Privilege level: 5
+
+These credentials are intentionally public and are for the CML lab only.
