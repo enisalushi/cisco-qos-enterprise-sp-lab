@@ -26,6 +26,14 @@ The lab was built while studying for **Cisco CCNP Enterprise ENCOR 350-401**.
 
 # Network Topology
 
+## Cisco CML Topology
+
+![Cisco CML Enterprise Service Provider QoS Topology](topology/topology.png)
+
+The topology consists of two customer edge routers connected across a three-router Service Provider network. The provider core uses OSPF and MPLS/LDP, while eBGP connects each customer site to the Provider Edge.
+
+## Logical Topology
+
 ```mermaid
 flowchart LR
 
