@@ -1,0 +1,239 @@
+Building configuration...
+
+Current configuration : 5983 bytes
+!
+! Last configuration change at 17:47:59 UTC Tue Sep 8 2026
+!
+version 15.9
+service timestamps debug datetime msec
+service timestamps log datetime msec
+service password-encryption
+!
+hostname LON-PE1
+!
+boot-start-marker
+boot-end-marker
+!
+!
+logging buffered 16384 informational
+no logging console
+enable secret 9 $9$tQOT8QfFGDSepP$.Endl7sgjeMEPcnqCspnFPqug0BJeqcakgkof9WG3R6
+!
+no aaa new-model
+!
+!
+!
+mmi polling-interval 60
+no mmi auto-configure
+no mmi pvc
+mmi snmp-timeout 180
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+ip domain name enis-lab.local
+ip cef
+no ipv6 cef
+!
+multilink bundle-name authenticated
+!
+!
+!
+!
+username test privilege 5 secret 9 $9$FX2yKOGqGmy7Vv$eQmrnrzbWEXZl2uGMeznuOS46qcByPKtfjn6Os57f4o
+!
+redundancy
+!
+!
+!
+class-map match-any CM-VERIFY-EF
+ match dscp ef 
+class-map match-any CM-VERIFY-BE
+ match dscp default 
+class-map match-any CM-SP-EGRESS-BULK
+ match dscp cs1 
+class-map match-all SP-BR-VIDEO-TRUSTED
+ match dscp af41 
+ match access-group name ACL-SP-BR-VIDEO-TRUSTED
+class-map match-all SP-BR-VOICE-TRUSTED
+ match dscp ef 
+ match access-group name ACL-SP-BR-VOICE-TRUSTED
+class-map match-any CM-SP-EGRESS-CRITICAL
+ match dscp af31 
+class-map match-all SP-BR-CRITICAL-TRUSTED
+ match dscp af31 
+ match access-group name ACL-SP-BR-CRITICAL-TRUSTED
+class-map match-any CM-SP-EGRESS-VOICE
+ match dscp ef 
+class-map match-any CM-SP-EGRESS-VIDEO
+ match dscp af41 
+class-map match-all SP-BR-BULK-TRUSTED
+ match dscp cs1 
+ match access-group name ACL-SP-BR-BULK-TRUSTED
+!
+policy-map PM-SP-BR-EGRESS-QOS
+ class CM-SP-EGRESS-VOICE
+  priority percent 20
+ class CM-SP-EGRESS-VIDEO
+  bandwidth percent 30 
+ class CM-SP-EGRESS-CRITICAL
+  bandwidth percent 25 
+ class CM-SP-EGRESS-BULK
+  bandwidth percent 5 
+  random-detect dscp-based
+  random-detect dscp 8 10 30 10
+ class class-default
+policy-map PM-SP-BR-EGRESS-SHAPER
+ class class-default
+  shape average 800000   
+   service-policy PM-SP-BR-EGRESS-QOS
+policy-map PM-SP-BR-CUSTOMER-IN
+ class SP-BR-VOICE-TRUSTED
+ class SP-BR-VIDEO-TRUSTED
+ class SP-BR-CRITICAL-TRUSTED
+ class SP-BR-BULK-TRUSTED
+ class class-default
+  set dscp default
+!
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+interface Loopback0
+ description ROUTER-ID
+ ip address 4.4.4.4 255.255.255.255
+!
+interface GigabitEthernet0/0
+ description TO-FRA-P1
+ ip address 10.10.34.2 255.255.255.252
+ duplex auto
+ speed auto
+ media-type rj45
+ mpls ip
+!
+interface GigabitEthernet0/1
+ description TO-LON-BR-CE1
+ ip address 10.10.45.1 255.255.255.252
+ duplex auto
+ speed auto
+ media-type rj45
+ service-policy input PM-SP-BR-CUSTOMER-IN
+ service-policy output PM-SP-BR-EGRESS-SHAPER
+!
+interface GigabitEthernet0/2
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/3
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+router ospf 100
+ router-id 4.4.4.4
+ passive-interface default
+ no passive-interface GigabitEthernet0/0
+ network 4.4.4.4 0.0.0.0 area 0
+ network 10.10.34.0 0.0.0.3 area 0
+!
+router bgp 65100
+ bgp router-id 4.4.4.4
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ neighbor 2.2.2.2 remote-as 65100
+ neighbor 2.2.2.2 update-source Loopback0
+ neighbor 10.10.45.2 remote-as 65020
+ !
+ address-family ipv4
+  neighbor 2.2.2.2 activate
+  neighbor 2.2.2.2 next-hop-self
+  neighbor 10.10.45.2 activate
+ exit-address-family
+!
+ip forward-protocol nd
+!
+!
+no ip http server
+no ip http secure-server
+ip ssh time-out 60
+ip ssh version 2
+!
+ip access-list extended ACL-SP-BR-BULK-TRUSTED
+ permit ip 192.168.150.0 0.0.0.255 any
+ip access-list extended ACL-SP-BR-CRITICAL-TRUSTED
+ permit ip 192.168.140.0 0.0.0.255 any
+ip access-list extended ACL-SP-BR-VIDEO-TRUSTED
+ permit ip 192.168.130.0 0.0.0.255 any
+ip access-list extended ACL-SP-BR-VOICE-TRUSTED
+ permit ip 192.168.120.0 0.0.0.255 any
+!
+ipv6 ioam timestamp
+!
+!
+mpls ldp router-id Loopback0 force
+!
+control-plane
+!
+banner exec ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner incoming ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner login ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner motd ^CCUnauthorized access prohibited.^C
+!
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+ login local
+line aux 0
+line vty 0 4
+ exec-timeout 0 0
+ login local
+ transport input ssh
+!
+no scheduler allocate
+!
+end

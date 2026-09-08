@@ -1,0 +1,250 @@
+Building configuration...
+
+Current configuration : 6089 bytes
+!
+! Last configuration change at 17:47:59 UTC Tue Sep 8 2026
+!
+version 15.9
+service timestamps debug datetime msec
+service timestamps log datetime msec
+service password-encryption
+!
+hostname LON-BR-CE1
+!
+boot-start-marker
+boot-end-marker
+!
+!
+logging buffered 16384 informational
+no logging console
+enable secret 9 $9$dPEmQPN78XH.Qf$h/qQ9w1c2u0uF.Kt07mp5l6fKLKxVmcTfKj4QhXLedM
+!
+no aaa new-model
+!
+!
+!
+mmi polling-interval 60
+no mmi auto-configure
+no mmi pvc
+mmi snmp-timeout 180
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+ip domain name enis-lab.local
+ip cef
+no ipv6 cef
+!
+multilink bundle-name authenticated
+!
+!
+!
+!
+username test privilege 5 secret 9 $9$z6drgFr5UgqsZv$z7le8XEm3iVsHjGQd1nRhSrSgRQH7lcHmXguUulzuHk
+!
+redundancy
+!
+!
+!
+class-map match-any CM-BR-BULK
+ match access-group name ACL-BR-BULK
+class-map match-any CM-BR-CRITICAL
+ match access-group name ACL-BR-CRITICAL
+class-map match-any CM-BR-VOICE
+ match access-group name ACL-BR-VOICE
+class-map match-any CM-BR-VIDEO
+ match access-group name ACL-BR-VIDEO
+!
+policy-map PM-BR-QOS-OUT
+ class CM-BR-VOICE
+  set dscp ef
+  priority percent 20
+ class CM-BR-VIDEO
+  set dscp af41
+  bandwidth percent 30 
+ class CM-BR-CRITICAL
+  set dscp af31
+  bandwidth percent 25 
+ class CM-BR-BULK
+  set dscp cs1
+  bandwidth percent 5 
+ class class-default
+policy-map PM-BR-WAN-SHAPER
+ class class-default
+  shape average 1000000   
+   service-policy PM-BR-QOS-OUT
+!
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+interface Loopback0
+ description ROUTER-ID
+ ip address 5.5.5.5 255.255.255.255
+!
+interface Loopback110
+ description BRANCH-USERS
+ ip address 192.168.110.1 255.255.255.0
+!
+interface Loopback120
+ description BRANCH-VOICE
+ ip address 192.168.120.1 255.255.255.0
+!
+interface Loopback130
+ description BRANCH-VIDEO
+ ip address 192.168.130.1 255.255.255.0
+!
+interface Loopback140
+ description BRANCH-CRITICAL-DATA
+ ip address 192.168.140.1 255.255.255.0
+!
+interface Loopback150
+ description BRANCH-BULK-DATA
+ ip address 192.168.150.1 255.255.255.0
+!
+interface GigabitEthernet0/0
+ description TO-LON-PE1
+ ip address 10.10.45.2 255.255.255.252
+ duplex auto
+ speed auto
+ media-type rj45
+ service-policy output PM-BR-WAN-SHAPER
+!
+interface GigabitEthernet0/1
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/2
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/3
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+router bgp 65020
+ bgp router-id 5.5.5.5
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ neighbor 10.10.45.1 remote-as 65100
+ !
+ address-family ipv4
+  network 192.168.110.0
+  network 192.168.120.0
+  network 192.168.130.0
+  network 192.168.140.0
+  network 192.168.150.0
+  neighbor 10.10.45.1 activate
+ exit-address-family
+!
+ip forward-protocol nd
+!
+!
+no ip http server
+no ip http secure-server
+ip ssh time-out 60
+ip ssh version 2
+!
+ip access-list extended ACL-BR-BULK
+ permit ip 192.168.150.0 0.0.0.255 any
+ip access-list extended ACL-BR-CRITICAL
+ permit ip 192.168.140.0 0.0.0.255 any
+ip access-list extended ACL-BR-VIDEO
+ permit ip 192.168.130.0 0.0.0.255 any
+ip access-list extended ACL-BR-VOICE
+ permit ip 192.168.120.0 0.0.0.255 any
+!
+ip sla 110
+ udp-jitter 192.168.10.1 20110 source-ip 192.168.110.1 source-port 10110 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 120
+ udp-jitter 192.168.20.1 20120 source-ip 192.168.120.1 source-port 10120 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 130
+ udp-jitter 192.168.30.1 20130 source-ip 192.168.130.1 source-port 10130 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 140
+ udp-jitter 192.168.40.1 20140 source-ip 192.168.140.1 source-port 10140 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 150
+ udp-jitter 192.168.50.1 20150 source-ip 192.168.150.1 source-port 10150 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla responder
+ipv6 ioam timestamp
+!
+!
+!
+control-plane
+!
+banner exec ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner incoming ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner login ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner motd ^CCUnauthorized access prohibited.^C
+!
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+ login local
+line aux 0
+line vty 0 4
+ exec-timeout 0 0
+ login local
+ transport input ssh
+!
+no scheduler allocate
+!
+end

@@ -1,0 +1,276 @@
+Building configuration...
+
+Current configuration : 6744 bytes
+!
+! Last configuration change at 17:48:00 UTC Tue Sep 8 2026 by admin
+!
+version 15.9
+service timestamps debug datetime msec
+service timestamps log datetime msec
+service password-encryption
+!
+hostname AMS-HQ-CE1
+!
+boot-start-marker
+boot-end-marker
+!
+!
+logging buffered 16384 informational
+no logging console
+!
+no aaa new-model
+!
+!
+!
+mmi polling-interval 60
+no mmi auto-configure
+no mmi pvc
+mmi snmp-timeout 180
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+ip domain name enis-lab.local
+ip cef
+no ipv6 cef
+!
+multilink bundle-name authenticated
+!
+!
+!
+!
+username test privilege 5 secret 9 $9$wO.VtGmqGTrlUv$LxqGKzbFyUdS6wJrd70SJFeINpSxXjmDN54/gvg.U0w
+!
+redundancy
+!
+!
+!
+class-map match-any CM-CRITICAL
+ match access-group name ACL-QOS-CRITICAL
+class-map match-any CM-BULK
+ match access-group name ACL-QOS-BULK
+class-map match-any CM-VIDEO
+ match access-group name ACL-QOS-VIDEO
+class-map match-any CM-VOICE
+ match access-group name ACL-QOS-VOICE
+!
+policy-map PM-HQ-QOS-OUT
+ class CM-VOICE
+  set dscp ef
+  priority percent 20
+ class CM-VIDEO
+  set dscp af41
+  bandwidth percent 30 
+ class CM-CRITICAL
+  set dscp af31
+  bandwidth percent 25 
+ class CM-BULK
+  set dscp cs1
+  bandwidth percent 5 
+  random-detect dscp-based
+  random-detect dscp 8 10 30 10
+ class class-default
+policy-map PM-WAN-SHAPER
+ class class-default
+  shape average 1000000   
+   service-policy PM-HQ-QOS-OUT
+policy-map PM-WAN-POLICER
+ class class-default
+  police cir 1000000 bc 4000
+   conform-action transmit 
+   exceed-action drop 
+!
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+interface Loopback0
+ description ROUTER-ID
+ ip address 1.1.1.1 255.255.255.255
+!
+interface Loopback10
+ description HQ-USERS
+ ip address 192.168.10.1 255.255.255.0
+!
+interface Loopback20
+ description HQ-VOICE
+ ip address 192.168.20.1 255.255.255.0
+!
+interface Loopback30
+ description HQ-VIDEO
+ ip address 192.168.30.1 255.255.255.0
+!
+interface Loopback40
+ description HQ-CRITICAL-DATA
+ ip address 192.168.40.1 255.255.255.0
+!
+interface Loopback50
+ description HQ-BULK-DATA
+ ip address 192.168.50.1 255.255.255.0
+!
+interface GigabitEthernet0/0
+ description TO-AMS-PE1
+ ip address 10.10.12.1 255.255.255.252
+ duplex auto
+ speed auto
+ media-type rj45
+ service-policy output PM-WAN-SHAPER
+!
+interface GigabitEthernet0/1
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/2
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/3
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+router bgp 65010
+ bgp router-id 1.1.1.1
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ neighbor 10.10.12.2 remote-as 65100
+ !
+ address-family ipv4
+  network 192.168.10.0
+  network 192.168.20.0
+  network 192.168.30.0
+  network 192.168.40.0
+  network 192.168.50.0
+  neighbor 10.10.12.2 activate
+ exit-address-family
+!
+ip forward-protocol nd
+!
+!
+no ip http server
+no ip http secure-server
+ip ssh time-out 60
+ip ssh version 2
+!
+ip access-list extended ACL-QOS-BULK
+ permit ip 192.168.50.0 0.0.0.255 any
+ip access-list extended ACL-QOS-CRITICAL
+ permit ip 192.168.40.0 0.0.0.255 any
+ip access-list extended ACL-QOS-VIDEO
+ permit ip 192.168.30.0 0.0.0.255 any
+ip access-list extended ACL-QOS-VOICE
+ permit ip 192.168.20.0 0.0.0.255 any
+!
+ip sla 10
+ udp-jitter 192.168.110.1 20010 source-ip 192.168.10.1 source-port 10010 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 20
+ udp-jitter 192.168.120.1 20020 source-ip 192.168.20.1 source-port 10020 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 30
+ udp-jitter 192.168.130.1 20030 source-ip 192.168.30.1 source-port 10030 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 40
+ udp-jitter 192.168.140.1 20040 source-ip 192.168.40.1 source-port 10040 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 50
+ udp-jitter 192.168.150.1 20050 source-ip 192.168.50.1 source-port 10050 num-packets 100
+ request-data-size 1400
+ frequency 20
+ip sla 51
+ udp-jitter 192.168.150.1 20051 source-ip 192.168.50.1 source-port 10051 num-packets 200 interval 5
+ request-data-size 1400
+ tos 104
+ frequency 5
+ip sla 52
+ udp-jitter 192.168.150.1 20052 source-ip 192.168.50.1 source-port 10052 num-packets 200 interval 5
+ request-data-size 1400
+ tos 120
+ frequency 5
+ip sla 60
+ udp-jitter 192.168.110.1 20060 source-ip 192.168.10.1 source-port 10060 num-packets 100
+ request-data-size 1400
+ tos 184
+ frequency 20
+ip sla 61
+ udp-jitter 192.168.110.1 20061 source-ip 192.168.10.1 source-port 10061 num-packets 100
+ request-data-size 1400
+ tos 136
+ frequency 20
+ip sla responder
+ipv6 ioam timestamp
+!
+!
+!
+control-plane
+!
+banner exec ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner incoming ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner login ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner motd ^CCUnauthorized access prohibited.^C
+!
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+ login local
+line aux 0
+line vty 0 4
+ exec-timeout 0 0
+ login local
+ transport input ssh
+!
+no scheduler allocate
+!
+end

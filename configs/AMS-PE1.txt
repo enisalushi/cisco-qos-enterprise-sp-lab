@@ -1,0 +1,257 @@
+Building configuration...
+
+Current configuration : 6342 bytes
+!
+! Last configuration change at 17:48:00 UTC Tue Sep 8 2026
+!
+version 15.9
+service timestamps debug datetime msec
+service timestamps log datetime msec
+service password-encryption
+!
+hostname AMS-PE1
+!
+boot-start-marker
+boot-end-marker
+!
+!
+logging buffered 16384 informational
+no logging console
+enable secret 9 $9$.HX0Yhk5C3bGrv$bB6cahRtaZWrjLiYT7CnQoqPdYiwNWJiyUKyTwGm07Y
+!
+no aaa new-model
+!
+!
+!
+mmi polling-interval 60
+no mmi auto-configure
+no mmi pvc
+mmi snmp-timeout 180
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+ip domain name enis-lab.local
+ip cef
+no ipv6 cef
+!
+multilink bundle-name authenticated
+!
+!
+!
+!
+username test privilege 5 secret 9 $9$a0w3Att8UfmAu9$o5zh3KKPECJV044IwgJs7ydTRwOq..axnvJcJXGFfmA
+!
+redundancy
+!
+!
+!
+class-map match-all SP-VOICE-TRUSTED
+ match access-group name ACL-SP-VOICE-TRUSTED
+ match dscp ef 
+class-map match-any CM-RX-AF31
+ match dscp af31 
+class-map match-any CM-RX-AF41
+ match dscp af41 
+class-map match-any CM-RX-EF
+ match dscp ef 
+class-map match-all SP-VIDEO-TRUSTED
+ match access-group name ACL-SP-VIDEO-TRUSTED
+ match dscp af41 
+class-map match-any CM-SP-HQ-EGRESS-CRITICAL
+ match dscp af31 
+class-map match-any CM-SP-HQ-EGRESS-BULK
+ match dscp cs1 
+class-map match-any CM-RX-CS1
+ match dscp cs1 
+class-map match-any SP-CRITICAL
+ match dscp af31 
+class-map match-any SP-BULK
+ match dscp cs1 
+class-map match-all SP-BULK-TRUSTED
+ match access-group name ACL-SP-BULK-TRUSTED
+ match dscp cs1 
+class-map match-any CM-SP-HQ-EGRESS-VIDEO
+ match dscp af41 
+class-map match-any CM-SP-HQ-EGRESS-VOICE
+ match dscp ef 
+class-map match-all SP-CRITICAL-TRUSTED
+ match access-group name ACL-SP-CRITICAL-TRUSTED
+ match dscp af31 
+class-map match-any SP-VOICE
+ match dscp ef 
+class-map match-any SP-VIDEO
+ match dscp af41 
+!
+policy-map PM-SP-HQ-EGRESS-QOS
+ class CM-SP-HQ-EGRESS-VOICE
+  priority percent 20
+ class CM-SP-HQ-EGRESS-VIDEO
+  bandwidth percent 30 
+ class CM-SP-HQ-EGRESS-CRITICAL
+  bandwidth percent 25 
+ class CM-SP-HQ-EGRESS-BULK
+  bandwidth percent 5 
+  random-detect dscp-based
+  random-detect dscp 8 10 30 10
+ class class-default
+policy-map PM-SP-HQ-EGRESS-SHAPER
+ class class-default
+  shape average 800000   
+   service-policy PM-SP-HQ-EGRESS-QOS
+policy-map PM-SP-CUSTOMER-IN
+ class SP-VOICE-TRUSTED
+ class SP-VIDEO-TRUSTED
+ class SP-CRITICAL-TRUSTED
+ class SP-BULK-TRUSTED
+ class class-default
+  set dscp default
+policy-map PM-VERIFY-DSCP-IN
+ class CM-RX-EF
+ class CM-RX-AF41
+ class CM-RX-AF31
+ class CM-RX-CS1
+ class class-default
+!
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+interface Loopback0
+ description ROUTER-ID
+ ip address 2.2.2.2 255.255.255.255
+!
+interface GigabitEthernet0/0
+ description TO-AMS-HQ-CE1
+ ip address 10.10.12.2 255.255.255.252
+ duplex auto
+ speed auto
+ media-type rj45
+ service-policy input PM-SP-CUSTOMER-IN
+ service-policy output PM-SP-HQ-EGRESS-SHAPER
+!
+interface GigabitEthernet0/1
+ description TO-FRA-P1
+ ip address 10.10.23.1 255.255.255.252
+ duplex auto
+ speed auto
+ media-type rj45
+ mpls ip
+!
+interface GigabitEthernet0/2
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+interface GigabitEthernet0/3
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+ media-type rj45
+!
+router ospf 100
+ router-id 2.2.2.2
+ passive-interface default
+ no passive-interface GigabitEthernet0/1
+ network 2.2.2.2 0.0.0.0 area 0
+ network 10.10.23.0 0.0.0.3 area 0
+!
+router bgp 65100
+ bgp router-id 2.2.2.2
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ neighbor 4.4.4.4 remote-as 65100
+ neighbor 4.4.4.4 update-source Loopback0
+ neighbor 10.10.12.1 remote-as 65010
+ !
+ address-family ipv4
+  neighbor 4.4.4.4 activate
+  neighbor 4.4.4.4 next-hop-self
+  neighbor 10.10.12.1 activate
+ exit-address-family
+!
+ip forward-protocol nd
+!
+!
+no ip http server
+no ip http secure-server
+ip ssh time-out 60
+ip ssh version 2
+!
+ip access-list extended ACL-SP-BULK-TRUSTED
+ permit ip 192.168.50.0 0.0.0.255 any
+ip access-list extended ACL-SP-CRITICAL-TRUSTED
+ permit ip 192.168.40.0 0.0.0.255 any
+ip access-list extended ACL-SP-VIDEO-TRUSTED
+ permit ip 192.168.30.0 0.0.0.255 any
+ip access-list extended ACL-SP-VOICE-TRUSTED
+ permit ip 192.168.20.0 0.0.0.255 any
+!
+ipv6 ioam timestamp
+!
+!
+mpls ldp router-id Loopback0 force
+!
+control-plane
+!
+banner exec ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner incoming ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner login ^C
+**************************************************************************
+* IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+* education. IOSv is provided as-is and is not supported by Cisco's      *
+* Technical Advisory Center. Any use or disclosure, in whole or in part, *
+* of the IOSv Software or Documentation to any third party for any       *
+* purposes is expressly prohibited except as otherwise authorized by     *
+* Cisco in writing.                                                      *
+**************************************************************************^C
+banner motd ^CCUnauthorized access prohibited.^C
+!
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+ login local
+line aux 0
+line vty 0 4
+ exec-timeout 0 0
+ login local
+ transport input ssh
+!
+no scheduler allocate
+!
+end
