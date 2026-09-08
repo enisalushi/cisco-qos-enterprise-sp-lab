@@ -10,7 +10,10 @@ This folder contains the final sanitized configurations for all five Cisco IOSv 
 - LON-PE1
 - LON-BR-CE1
 
-> Admin credentials and authentication keys have been removed or replaced with placeholders before publication.
+> The repository contains an intentionally public low-privilege test account
+> for lab verification. Administrative and routing-protocol secrets are
+> sanitized before publication.
+
 ## Lab Access
 
 The lab includes a low-privilege test account for SSH verification:
