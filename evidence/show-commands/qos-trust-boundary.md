@@ -358,7 +358,7 @@ DSCP: EF (46)
 
 After `AMS-PE1` validates the source network and DSCP combination, the traffic fails the trusted Voice classification and is remarked to Best Effort.
 
-![Spoofed EF After Trust Boundary](../screenshots/spoofed-ef-after-trust-boundary.png)
+![Spoofed EF After Trust Boundary](../QOS/spoofed-ef-after-trust-boundary.png)
 
 Observed:
 
