@@ -338,7 +338,37 @@ ip.dsfield.dscp == 0
 This provides packet-level evidence that the provider does not blindly trust customer QoS markings.
 
 ---
+## Packet Capture Evidence
 
+### Spoofed EF Before Provider Trust Boundary
+
+The customer Users network sends traffic with an unauthorized EF marking.
+
+![Spoofed EF Before Trust Boundary](../screenshots/spoofed-ef-before-trust-boundary.png)
+
+Observed:
+
+```text
+Source: 192.168.10.1
+Destination: 192.168.110.1
+DSCP: EF (46)
+```
+
+### Same Traffic After Provider Trust Boundary
+
+After `AMS-PE1` validates the source network and DSCP combination, the traffic fails the trusted Voice classification and is remarked to Best Effort.
+
+![Spoofed EF After Trust Boundary](../screenshots/spoofed-ef-after-trust-boundary.png)
+
+Observed:
+
+```text
+Source: 192.168.10.1
+Destination: 192.168.110.1
+DSCP: Default / CS0 (0)
+```
+
+The raw packet captures are available in [`../packet-captures/`](../packet-captures/).
 # Key Findings
 
 The tests demonstrated:
