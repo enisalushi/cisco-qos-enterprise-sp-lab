@@ -308,7 +308,7 @@ Packet captures were used to validate the trust-boundary behavior directly on th
 
 A legitimate HQ Voice flow was captured between `AMS-HQ-CE1` and `AMS-PE1`.
 
-![Legitimate Voice EF DSCP 46](../screenshots/voice-ef-dscp46-wireshark.png)
+![Legitimate Voice EF DSCP 46](../screenshot/voice-ef-dscp46-wireshark.png)
 
 Observed:
 
@@ -331,7 +331,7 @@ Raw capture:
 
 A Users-network stream was intentionally marked as EF.
 
-![Spoofed EF Before Trust Boundary](../screenshots/spoofed-ef-before-trust-boundary.png)
+![Spoofed EF Before Trust Boundary](../screenshot/spoofed-ef-before-trust-boundary.png)
 
 Observed:
 
