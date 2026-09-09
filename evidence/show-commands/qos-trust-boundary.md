@@ -1,8 +1,8 @@
 # QoS Trust Boundary and DSCP Spoofing Validation
 
-This document records the provider QoS trust-boundary tests performed on the customer-facing Provider Edge interfaces.
+This document records the QoS trust-boundary tests performed on the customer-facing Provider Edge interfaces.
 
-The objective was to verify that customer DSCP markings are not blindly trusted.
+The objective was to verify that customer DSCP markings are **not blindly trusted**.
 
 The Provider Edge validates both:
 
@@ -16,9 +16,9 @@ Traffic that fails either condition is classified into `class-default` and remar
 
 ---
 
-# Trust Model
+## 1. Trust Model
 
-## HQ Side
+### HQ Side
 
 Traffic enters the Service Provider through:
 
@@ -29,7 +29,7 @@ AMS-HQ-CE1
 AMS-PE1 Gi0/0
 ```
 
-Trusted application mappings:
+Trusted HQ mappings:
 
 ```text
 192.168.20.0/24 + EF   -> Trusted Voice
@@ -38,18 +38,20 @@ Trusted application mappings:
 192.168.50.0/24 + CS1  -> Trusted Bulk
 ```
 
-Anything else falls into:
+Traffic that does not match one of these trusted combinations falls into:
 
 ```text
 class-default
  set dscp default
 ```
 
+The provider therefore does not make a trust decision based on DSCP alone.
+
 ---
 
-# Legitimate Traffic Test
+## 2. Legitimate Traffic Test
 
-The four legitimate HQ traffic classes were generated using IP SLA.
+The four legitimate HQ traffic classes were generated using Cisco IP SLA.
 
 Observed on `AMS-PE1`:
 
@@ -69,22 +71,31 @@ SP-BULK-TRUSTED
 
 Only a small amount of unmatched traffic reached `class-default`.
 
-This confirmed that the valid customer traffic satisfied both trust conditions.
+This confirmed that valid customer traffic satisfied both conditions:
+
+```text
+Correct source network
++
+Correct DSCP
+=
+Trusted traffic
+```
 
 ---
 
-# Spoofed EF Test
+## 3. Spoofed EF Test
 
-A fake high-priority stream was generated from the Users network:
+A fake high-priority stream was generated from the HQ Users network.
 
 ```text
 Source: 192.168.10.1
-DSCP: EF 46
+Destination: 192.168.110.1
+DSCP: EF (46)
 ```
 
-The packet therefore had a privileged Voice DSCP marking, but originated from the wrong source network.
+The packet carried a privileged Voice marking, but originated from the wrong source network.
 
-Expected trusted Voice network:
+Expected Voice source network:
 
 ```text
 192.168.20.0/24
@@ -109,29 +120,32 @@ class-default
         |
         v
 set dscp default
+        |
+        v
+DSCP 0
 ```
 
-The spoofed packets did not increment `SP-VOICE-TRUSTED`.
+The spoofed packets did not qualify for `SP-VOICE-TRUSTED`.
 
-Instead, they were received by `class-default` and remarked to DSCP 0.
+Instead, they were classified into `class-default` and remarked to DSCP 0.
 
-This demonstrated that an endpoint cannot obtain priority Voice treatment simply by setting EF.
+This demonstrates that a customer endpoint cannot obtain trusted Voice treatment simply by marking traffic as EF.
 
 ---
 
-# Legitimate Voice and Spoofed EF Together
+## 4. Legitimate Voice and Spoofed EF Together
 
-The test was repeated with both:
+The test was repeated with both legitimate and spoofed Voice traffic running.
+
+Legitimate Voice:
 
 ```text
-Legitimate Voice
 192.168.20.0/24 + EF
 ```
 
-and:
+Spoofed Voice:
 
 ```text
-Spoofed Voice
 192.168.10.0/24 + EF
 ```
 
@@ -144,9 +158,9 @@ SP-VOICE-TRUSTED
 
 The legitimate Voice stream matched the trusted class.
 
-The spoofed EF stream continued falling into `class-default`.
+The spoofed EF stream continued to fall into `class-default`.
 
-This demonstrated that the provider could distinguish between:
+This demonstrated that the Provider Edge could distinguish between:
 
 ```text
 Correct source + correct DSCP
@@ -160,9 +174,9 @@ Incorrect source + privileged DSCP
 
 ---
 
-# Spoofed AF41 Test
+## 5. Spoofed AF41 Test
 
-The trust model was also tested using Video traffic.
+The same trust model was tested with Video traffic.
 
 Legitimate Video:
 
@@ -186,7 +200,7 @@ AND
 DSCP AF41
 ```
 
-Therefore the spoofed packet failed the source validation:
+The spoofed packet therefore failed source-network validation:
 
 ```text
 192.168.10.1 + AF41
@@ -198,16 +212,19 @@ SP-VIDEO-TRUSTED
 class-default
         |
         v
+set dscp default
+        |
+        v
 DSCP 0
 ```
 
-The spoofed AF41 packets were successfully prevented from receiving Video treatment.
+The spoofed AF41 traffic was successfully prevented from receiving trusted Video treatment.
 
 ---
 
-# Full HQ Trust Policy
+## 6. Final HQ Trust Policy
 
-The final provider ingress policy uses these trusted classes:
+The final provider ingress policy uses:
 
 ```text
 SP-VOICE-TRUSTED
@@ -216,23 +233,33 @@ SP-CRITICAL-TRUSTED
 SP-BULK-TRUSTED
 ```
 
-Each class-map uses `match-all`.
+Each trusted class-map uses `match-all`.
 
 Conceptually:
 
 ```text
 class-map match-all SP-VOICE-TRUSTED
- match source subnet
+ match access-group name ACL-SP-VOICE-TRUSTED
  match dscp ef
 ```
 
-This means both conditions must be true.
+Both conditions must therefore match before traffic enters the trusted class.
+
+The corresponding policy behavior is:
+
+```text
+Trusted class
+-> preserve existing DSCP
+
+class-default
+-> set dscp default
+```
 
 ---
 
-# Branch Trust Boundary
+## 7. Branch Trust Boundary
 
-The same model was implemented on `LON-PE1`.
+The same trust model was implemented on `LON-PE1` for Branch-to-Provider traffic.
 
 Trusted Branch mappings:
 
@@ -243,7 +270,7 @@ Trusted Branch mappings:
 192.168.150.0/24 + CS1  -> Trusted Bulk
 ```
 
-Observed during reverse-direction testing:
+During the initial validation, the four trusted classes each recorded:
 
 ```text
 SP-BR-VOICE-TRUSTED
@@ -259,90 +286,50 @@ SP-BR-BULK-TRUSTED
 71 packets
 ```
 
-After correcting the IP SLA responder and allowing the actual UDP-jitter data stream to run, the Video trusted class increased to:
+At that stage, the IP SLA responder was not yet active, so these counters primarily reflected the initial SLA/control traffic.
+
+After enabling the IP SLA responder and allowing the actual UDP-jitter data stream to run, the Video class increased to:
 
 ```text
+SP-BR-VIDEO-TRUSTED
 641 packets
 734354 bytes
 ```
 
-This confirmed that the complete Branch-to-HQ data stream was correctly marked and trusted.
+This confirmed that the actual Branch-to-HQ data traffic was correctly marked and accepted by the provider trust policy.
 
 ---
 
-# Why This Matters
+## 8. Packet Capture Evidence
 
-Without a trust boundary, a customer endpoint could mark arbitrary traffic as:
+Packet captures were used to validate the trust-boundary behavior directly on the wire.
 
-```text
-EF
-```
+### 8.1 Legitimate Voice — EF 46
 
-and attempt to gain strict-priority treatment.
+A legitimate HQ Voice flow was captured between `AMS-HQ-CE1` and `AMS-PE1`.
 
-The provider policy prevents this by validating traffic against the expected customer service network.
+![Legitimate Voice EF DSCP 46](../screenshots/voice-ef-dscp46-wireshark.png)
 
-The trust decision is therefore:
+Observed:
 
 ```text
-DSCP alone
-!=
-trusted traffic
+Source: 192.168.20.1
+Destination: 192.168.120.1
+UDP: 10020 -> 20020
+DSCP: Expedited Forwarding (46)
 ```
 
-Instead:
+This verifies that the CE marked legitimate Voice traffic as EF before it entered the provider.
 
-```text
-Source identity
-+
-Expected QoS marking
-=
-Trusted traffic
-```
+Raw capture:
+
+[`voice-ef-dscp46.pcap`](../packet-captures/voice-ef-dscp46.pcap)
 
 ---
 
-# Packet Capture Validation
+### 8.2 Spoofed EF Before Provider Trust Boundary
 
-This behavior can also be verified using packet capture.
-
-## Before Provider Trust Enforcement
-
-A spoofed stream can be observed as:
-
-```text
-Source: 192.168.10.1
-DSCP: EF 46
-```
-
-Wireshark filter:
-
-```text
-ip.dsfield.dscp == 46
-```
-
-## After Provider Trust Enforcement
-
-The same untrusted traffic is expected to appear as:
-
-```text
-DSCP 0
-```
-
-Wireshark filter:
-
-```text
-ip.dsfield.dscp == 0
-```
-
-This provides packet-level evidence that the provider does not blindly trust customer QoS markings.
-
----
-## Packet Capture Evidence
-
-### Spoofed EF Before Provider Trust Boundary
-
-The customer Users network sends traffic with an unauthorized EF marking.
+A Users-network stream was intentionally marked as EF.
 
 ![Spoofed EF Before Trust Boundary](../screenshots/spoofed-ef-before-trust-boundary.png)
 
@@ -351,50 +338,158 @@ Observed:
 ```text
 Source: 192.168.10.1
 Destination: 192.168.110.1
-DSCP: EF (46)
+UDP: 10060 -> 20060
+DSCP: Expedited Forwarding (46)
 ```
 
-### Same Traffic After Provider Trust Boundary
+This proves that the customer sent privileged EF marking into the Provider Edge.
 
-After `AMS-PE1` validates the source network and DSCP combination, the traffic fails the trusted Voice classification and is remarked to Best Effort.
+Raw capture:
 
-![Spoofed EF After Trust Boundary](../QOS/spoofed-ef-after-trust-boundary.png)
+[`spoofed-ef-before-trust-boundary.pcap`](../packet-captures/spoofed-ef-before-trust-boundary.pcap)
+
+---
+
+### 8.3 Same Traffic After Provider Trust Boundary
+
+The same flow was captured again after it had crossed the provider network.
+
+![Spoofed EF After Trust Boundary](../screenshots/spoofed-ef-after-trust-boundary.png)
 
 Observed:
 
 ```text
 Source: 192.168.10.1
 Destination: 192.168.110.1
+UDP: 10060 -> 20060
 DSCP: Default / CS0 (0)
 ```
 
-The raw packet captures are available in [`../packet-captures/`](../packet-captures/).
-# Key Findings
+The source and destination remained unchanged, but the DSCP value changed:
+
+```text
+Before AMS-PE1:
+EF 46
+
+After AMS-PE1:
+CS0 / DSCP 0
+```
+
+This provides packet-level proof that the provider trust boundary rejected the unauthorized EF marking and remarked the flow to Best Effort.
+
+Raw capture:
+
+[`spoofed-ef-after-trust-boundary.pcap`](../packet-captures/spoofed-ef-after-trust-boundary.pcap)
+
+---
+
+## 9. Before-and-After Comparison
+
+| Property | Before Trust Boundary | After Trust Boundary |
+|---|---|---|
+| Source | `192.168.10.1` | `192.168.10.1` |
+| Destination | `192.168.110.1` | `192.168.110.1` |
+| UDP Flow | `10060 -> 20060` | `10060 -> 20060` |
+| DSCP | EF / 46 | CS0 / 0 |
+| Trust Result | Untrusted EF arrives | Remarked to Best Effort |
+
+Packet behavior:
+
+```text
+Customer Users Network
+192.168.10.1
+DSCP EF 46
+      |
+      v
+AMS-PE1
+      |
+      | Source is NOT 192.168.20.0/24
+      |
+      X SP-VOICE-TRUSTED
+      |
+      v
+class-default
+      |
+      | set dscp default
+      v
+Provider Network
+      |
+      v
+LON-BR-CE1
+DSCP 0
+```
+
+---
+
+## 10. Why This Matters
+
+Without a trust boundary, a customer endpoint could mark arbitrary traffic as:
+
+```text
+EF
+```
+
+and attempt to request privileged QoS treatment.
+
+The provider prevents this by validating the expected relationship between:
+
+```text
+Source network
++
+DSCP marking
+```
+
+The trust decision is therefore not:
+
+```text
+DSCP = EF
+-> automatically trusted
+```
+
+Instead:
+
+```text
+Expected source network
++
+Expected DSCP
+=
+Trusted class
+```
+
+Anything else is treated as Best Effort.
+
+---
+
+## 11. Key Findings
 
 The tests demonstrated:
 
 - Customer DSCP markings are validated at the provider edge.
-- `match-all` can enforce both source-network and DSCP requirements.
-- Legitimate Voice, Video, Critical, and Bulk traffic are accepted.
-- Spoofed EF traffic is denied privileged Voice classification.
-- Spoofed AF41 traffic is denied privileged Video classification.
-- Untrusted traffic is remarked to DSCP 0.
-- The trust model works in both customer directions.
+- `match-all` requires both source-network and DSCP conditions to match.
+- Legitimate Voice, Video, Critical, and Bulk traffic can retain their expected QoS markings.
+- Spoofed EF traffic is denied trusted Voice classification.
+- Spoofed AF41 traffic is denied trusted Video classification.
+- Untrusted customer traffic is remarked to DSCP 0.
+- Wireshark confirms EF 46 before the trust boundary and CS0 after enforcement.
+- The same trust model is implemented on both customer-facing Provider Edge routers.
+- Router policy counters and packet captures validate the same behavior from two different perspectives.
 
 ---
 
-# Conclusion
+## 12. Conclusion
 
-The QoS trust-boundary implementation successfully protects the provider network from incorrect or intentionally spoofed customer DSCP markings.
+The QoS trust-boundary implementation successfully prevents incorrect or intentionally spoofed customer DSCP markings from automatically receiving privileged QoS treatment.
 
 The final design follows this principle:
 
 ```text
-Trust but verify.
-
 Correct source + correct DSCP
--> Preserve QoS treatment
+-> Preserve trusted QoS treatment
 
 Wrong source and/or wrong DSCP
--> Reset to Best Effort
+-> class-default
+-> Reset to DSCP 0
+-> Best Effort
 ```
+
+The combination of MQC counters and Wireshark packet captures provides end-to-end evidence that the policy behaves as designed.
