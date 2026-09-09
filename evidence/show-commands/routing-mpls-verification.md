@@ -1,18 +1,58 @@
 # Routing and MPLS Verification
 
-This document contains operational verification for the routing and MPLS transport used by the QoS lab.
+This document provides operational evidence for the routing and MPLS transport used by the Enterprise / Service Provider QoS lab.
+
+The transport architecture is:
+
+```text
+AMS-HQ-CE1 ---- AMS-PE1 ---- FRA-P1 ---- LON-PE1 ---- LON-BR-CE1
+    CE             PE           P            PE             CE
+```
+
+The provider core uses:
+
+- OSPF Area 0
+- MPLS
+- LDP
+
+The customer/provider edge uses:
+
+- eBGP between CE and PE
+- iBGP between the PE routers
+
+`FRA-P1` remains intentionally BGP-free.
 
 ---
 
-## 1. Provider OSPF Adjacencies
+## 1. Provider OSPF Architecture
 
-The Service Provider underlay runs OSPF Area 0 between:
+OSPF runs only inside the Service Provider core:
 
 ```text
-AMS-PE1 ---- FRA-P1 ---- LON-PE1
+AMS-PE1
+   |
+   | 10.10.23.0/30
+   |
+FRA-P1
+   |
+   | 10.10.34.0/30
+   |
+LON-PE1
 ```
 
-### AMS-PE1
+Provider router IDs:
+
+```text
+AMS-PE1  -> 2.2.2.2
+FRA-P1   -> 3.3.3.3
+LON-PE1  -> 4.4.4.4
+```
+
+Customer-facing interfaces are intentionally excluded from the provider OSPF domain.
+
+---
+
+## 2. OSPF Neighbor Verification
 
 Verification command:
 
@@ -20,78 +60,103 @@ Verification command:
 show ip ospf neighbor
 ```
 
-Expected adjacency:
+On `FRA-P1`, both Provider Edge routers should form FULL OSPF adjacencies.
+
+Expected neighbors:
 
 ```text
-FRA-P1 / 3.3.3.3 -> FULL
+2.2.2.2 -> AMS-PE1
+4.4.4.4 -> LON-PE1
 ```
 
-### FRA-P1
+### Real Lab Evidence
 
-Verification command:
+![FRA-P1 OSPF Neighbors](../screenshot/fra-ospf-neighbors.png)
 
-```text
-show ip ospf neighbor
-```
+The screenshot confirms that `FRA-P1` has established OSPF adjacency with both PE routers.
 
-Expected adjacencies:
+Expected state:
 
 ```text
-AMS-PE1 / 2.2.2.2 -> FULL
-LON-PE1 / 4.4.4.4 -> FULL
-```
-
-### LON-PE1
-
-Verification command:
-
-```text
-show ip ospf neighbor
-```
-
-Expected adjacency:
-
-```text
-FRA-P1 / 3.3.3.3 -> FULL
+AMS-PE1 -> FULL
+LON-PE1 -> FULL
 ```
 
 ---
 
-## 2. BGP Verification
+## 3. BGP Architecture
 
-### HQ Customer Edge
-
-Device:
+### HQ eBGP
 
 ```text
-AMS-HQ-CE1
+AMS-HQ-CE1 AS65010
+        |
+        | eBGP
+        |
+AMS-PE1 AS65100
 ```
 
-Verification command:
+Transit network:
+
+```text
+10.10.12.0/30
+```
+
+---
+
+### Provider iBGP
+
+```text
+AMS-PE1
+Lo0: 2.2.2.2
+        |
+        | iBGP AS65100
+        |
+LON-PE1
+Lo0: 4.4.4.4
+```
+
+The iBGP session uses PE loopbacks.
+
+---
+
+### Branch eBGP
+
+```text
+LON-PE1 AS65100
+        |
+        | eBGP
+        |
+LON-BR-CE1 AS65020
+```
+
+Transit network:
+
+```text
+10.10.45.0/30
+```
+
+---
+
+## 4. BGP Verification Commands
+
+### AMS-HQ-CE1
 
 ```text
 show bgp ipv4 unicast summary
 ```
 
-Expected eBGP peer:
+Expected peer:
 
 ```text
 10.10.12.2
-Remote AS: 65100
-State: Established
+Remote AS 65100
+State Established
 ```
 
 ---
 
-### Amsterdam Provider Edge
-
-Device:
-
-```text
-AMS-PE1
-```
-
-Verification command:
+### AMS-PE1
 
 ```text
 show bgp ipv4 unicast summary
@@ -101,25 +166,21 @@ Expected peers:
 
 ```text
 10.10.12.1
-Remote AS: 65010
+Remote AS 65010
 eBGP
+```
 
+and:
+
+```text
 4.4.4.4
-Remote AS: 65100
+Remote AS 65100
 iBGP
 ```
 
 ---
 
-### London Provider Edge
-
-Device:
-
-```text
-LON-PE1
-```
-
-Verification command:
+### LON-PE1
 
 ```text
 show bgp ipv4 unicast summary
@@ -129,155 +190,207 @@ Expected peers:
 
 ```text
 2.2.2.2
-Remote AS: 65100
+Remote AS 65100
 iBGP
+```
 
+and:
+
+```text
 10.10.45.2
-Remote AS: 65020
+Remote AS 65020
 eBGP
 ```
 
 ---
 
-### Branch Customer Edge
-
-Device:
-
-```text
-LON-BR-CE1
-```
-
-Verification command:
+### LON-BR-CE1
 
 ```text
 show bgp ipv4 unicast summary
 ```
 
-Expected eBGP peer:
+Expected peer:
 
 ```text
 10.10.45.1
-Remote AS: 65100
-State: Established
+Remote AS 65100
+State Established
 ```
 
 ---
 
-## 3. BGP-Free Provider Core
+## 5. BGP-Free Provider Core
 
 `FRA-P1` intentionally does not run BGP.
 
-Its role is limited to:
+Its responsibilities are limited to:
 
-- OSPF underlay routing
-- MPLS label switching
-- LDP
+```text
+OSPF
+MPLS forwarding
+LDP
+```
 
-This demonstrates a BGP-free P-router design.
+This allows the P router to forward customer traffic without carrying customer BGP routes.
+
+Conceptually:
+
+```text
+CE
+ |
+PE
+ |
+| BGP routes converted into MPLS forwarding
+|
+P
+|
+| Label switching only
+|
+PE
+ |
+CE
+```
 
 ---
 
-## 4. MPLS LDP Verification
+## 6. MPLS / LDP Architecture
 
-MPLS/LDP operates only across the provider core:
+MPLS is enabled only across the provider core:
 
 ```text
-AMS-PE1 ---- FRA-P1 ---- LON-PE1
+AMS-PE1 Gi0/1
+      |
+      | MPLS / LDP
+      |
+FRA-P1 Gi0/0
+
+FRA-P1 Gi0/1
+      |
+      | MPLS / LDP
+      |
+LON-PE1 Gi0/0
 ```
 
-### AMS-PE1
+MPLS is intentionally not enabled on customer-facing interfaces.
+
+---
+
+## 7. LDP Neighbor Verification
+
+Verification command:
 
 ```text
 show mpls ldp neighbor
 ```
 
-Expected LDP peer:
-
-```text
-3.3.3.3
-```
-
----
-
-### FRA-P1
-
-```text
-show mpls ldp neighbor
-```
-
-Expected LDP peers:
+Expected LDP peers on `FRA-P1`:
 
 ```text
 2.2.2.2
 4.4.4.4
 ```
 
----
+### Real Lab Evidence
 
-### LON-PE1
+![FRA-P1 MPLS LDP Neighbors](../screenshot/fra-mpls-ldp-neighbors.png)
 
-```text
-show mpls ldp neighbor
-```
-
-Expected LDP peer:
-
-```text
-3.3.3.3
-```
+The screenshot confirms that LDP sessions are operational toward both Provider Edge routers.
 
 ---
 
-## 5. MPLS Forwarding
+## 8. MPLS Forwarding Verification
 
-Verification command on `FRA-P1`:
+Verification command:
 
 ```text
 show mpls forwarding-table
 ```
 
-The provider core should contain labels for the PE loopbacks.
-
-Example forwarding behavior:
+On `FRA-P1`, the MPLS forwarding table should contain label entries toward:
 
 ```text
-2.2.2.2/32 -> toward AMS-PE1
-4.4.4.4/32 -> toward LON-PE1
+2.2.2.2/32
+4.4.4.4/32
 ```
 
-Penultimate Hop Popping can be observed where the outgoing operation is:
+### Real Lab Evidence
+
+![FRA-P1 MPLS Forwarding Table](../screenshot/fra-mpls-forwarding-table.png)
+
+The forwarding table demonstrates MPLS label switching across the provider core.
+
+---
+
+## 9. Penultimate Hop Popping
+
+The MPLS forwarding table can show:
 
 ```text
 Pop Label
 ```
 
+for routes toward the Provider Edge loopbacks.
+
+This demonstrates Penultimate Hop Popping.
+
+Conceptually:
+
+```text
+Ingress PE
+   |
+   | Label
+   v
+P Router
+   |
+   | Pop Label
+   v
+Egress PE
+```
+
+The penultimate router removes the transport label before forwarding the packet to the destination PE.
+
 ---
 
-## 6. Customer Route Verification
+## 10. Customer Route Verification
 
-### AMS-HQ-CE1
+### HQ to Branch
 
-Verify Branch Voice network:
+On `AMS-HQ-CE1`:
 
 ```text
 show ip route 192.168.120.0
 ```
 
-The route should be learned through eBGP from `AMS-PE1`.
+Expected:
 
-### LON-BR-CE1
+```text
+192.168.120.0/24
+learned through eBGP
+via AMS-PE1
+```
 
-Verify HQ Voice network:
+---
+
+### Branch to HQ
+
+On `LON-BR-CE1`:
 
 ```text
 show ip route 192.168.20.0
 ```
 
-The route should be learned through eBGP from `LON-PE1`.
+Expected:
+
+```text
+192.168.20.0/24
+learned through eBGP
+via LON-PE1
+```
 
 ---
 
-## 7. End-to-End Reachability
+## 11. End-to-End Reachability
 
 ### HQ to Branch
 
@@ -292,6 +405,8 @@ Expected result:
 ```text
 Success rate is 100 percent
 ```
+
+---
 
 ### Branch to HQ
 
@@ -309,17 +424,45 @@ Success rate is 100 percent
 
 ---
 
-## Verification Summary
+## 12. Verification Summary
 
-The following transport components are validated:
+The following infrastructure components were validated:
 
-- OSPF adjacencies across the provider core
-- eBGP between customer and provider edge routers
-- iBGP between provider edge routers
-- BGP-free provider core operation
-- MPLS/LDP neighbor establishment
-- MPLS label forwarding
-- End-to-end customer route propagation
-- Bidirectional customer reachability
+- OSPF Area 0 across the provider core
+- FULL OSPF neighbor adjacencies
+- eBGP between customer and provider routers
+- iBGP between Provider Edge routers
+- BGP-free provider P router
+- MPLS enabled across provider links
+- LDP neighbor establishment
+- MPLS forwarding-table population
+- Penultimate Hop Popping
+- Customer route propagation
+- Bidirectional end-to-end connectivity
 
-This routing and MPLS foundation provides the transport used by the QoS policies demonstrated elsewhere in the project.
+---
+
+## Conclusion
+
+The routing and MPLS infrastructure successfully provides the transport foundation required by the QoS lab.
+
+The architecture separates responsibilities cleanly:
+
+```text
+CE
+-> Customer routing
+
+PE
+-> BGP + MPLS edge
+
+P
+-> OSPF + MPLS label switching
+
+PE
+-> BGP + MPLS edge
+
+CE
+-> Customer routing
+```
+
+This transport layer allows the QoS policies documented elsewhere in the project to be tested end-to-end.
