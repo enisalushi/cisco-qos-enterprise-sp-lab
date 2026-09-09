@@ -1,60 +1,211 @@
 # QoS Congestion Test Results
 
-This document records measured QoS behavior during controlled congestion tests performed on both Provider Edge routers.
+This document records measured QoS behavior during controlled congestion tests performed across the Enterprise / Service Provider lab.
 
-The goal was to verify:
+The tests validate:
 
-- Hierarchical shaping
-- LLQ behavior
-- CBWFQ bandwidth guarantees
-- Best Effort treatment
-- WRED behavior
+- DSCP classification and marking
+- Hierarchical QoS
+- LLQ
+- CBWFQ
+- Parent shaping
+- Bandwidth guarantees
+- WRED
+- Best Effort behavior
+- Bidirectional provider QoS
 - Parent/child drop accounting
-- Symmetric QoS in both directions
+- Bandwidth guarantee versus rate limiting
 
 ---
 
-# Test 1 — HQ to Branch
+## 1. HQ QoS Classification and Marking
+
+Traffic originates from dedicated HQ service networks.
+
+```text
+192.168.20.0/24 -> Voice
+192.168.30.0/24 -> Video
+192.168.40.0/24 -> Critical
+192.168.50.0/24 -> Bulk
+```
+
+The customer CE applies:
+
+```text
+Voice    -> EF
+Video    -> AF41
+Critical -> AF31
+Bulk     -> CS1
+```
+
+### Real Lab Evidence
+
+![HQ QoS Classification and Marking](../screenshot/hq-qos-marking.png)
+
+The screenshot confirms that packets are classified and marked by the CE QoS policy.
+
+Observed markings:
+
+```text
+CM-VOICE
+-> DSCP EF
+
+CM-VIDEO
+-> DSCP AF41
+
+CM-CRITICAL
+-> DSCP AF31
+
+CM-BULK
+-> DSCP CS1
+```
+
+---
+
+## 2. Customer WAN Hierarchical QoS
+
+The permanent HQ CE WAN policy uses a 1 Mbps parent shaper.
+
+```text
+PM-WAN-SHAPER
+        |
+        | shape average 1000000
+        |
+        v
+PM-HQ-QOS-OUT
+```
+
+Child treatment:
+
+| Class | Treatment |
+|---|---|
+| Voice | LLQ 20% |
+| Video | Bandwidth 30% |
+| Critical | Bandwidth 25% |
+| Bulk | Bandwidth 5% + WRED |
+| Default | Remaining bandwidth |
+
+---
+
+# HQ to Branch Provider Congestion Test
 
 Traffic direction:
 
 ```text
 AMS-HQ-CE1
-    |
-    v
+      |
+      v
 AMS-PE1
-    |
-    v
+      |
+      v
 FRA-P1
-    |
-    v
+      |
+      v
 LON-PE1
-    |
-    v
+      |
+      v
 LON-BR-CE1
 ```
 
-The congestion point was intentionally created on:
+The controlled provider congestion point was:
 
 ```text
 LON-PE1 Gi0/1
 ```
 
-Provider customer-facing service rate:
+Provider service rate:
 
 ```text
 800 kbps
 ```
 
-The HQ CE parent shaper was temporarily increased during this test so that the main congestion point occurred at `LON-PE1`.
+For the controlled benchmark, the upstream CE shaper was temporarily increased so that `LON-PE1` became the primary congestion point.
 
 ---
 
-## Parent Shaper Result
+## 3. LON-PE1 Parent Shaper
+
+Provider egress parent policy:
 
 ```text
-Service-policy output: PM-SP-BR-EGRESS-SHAPER
+PM-SP-BR-EGRESS-SHAPER
+```
 
+Configured rate:
+
+```text
+shape average 800000
+```
+
+### Real Lab Evidence
+
+![LON-PE1 Provider Parent Shaper](../screenshot/lon-pe-provider-parent-shaper.png)
+
+The live screenshot confirms:
+
+```text
+Shape CIR: 800000 bps
+Target shape rate: 800000 bps
+```
+
+It also shows real packets being queued and dropped at the provider customer-facing service boundary.
+
+---
+
+## 4. LON-PE1 Child QoS Policy
+
+The parent shaper contains:
+
+```text
+PM-SP-BR-EGRESS-QOS
+```
+
+Classes:
+
+```text
+Voice
+Video
+Critical
+Bulk
+Best Effort
+```
+
+### Real Lab Evidence
+
+![LON-PE1 Provider QoS Classes](../screenshot/lon-pe-provider-congestion-classes.png)
+
+The screenshot demonstrates:
+
+```text
+Voice
+-> LLQ
+-> priority percent 20
+
+Video
+-> bandwidth percent 30
+
+Critical
+-> bandwidth percent 25
+
+Bulk
+-> bandwidth percent 5
+-> WRED
+
+Default
+-> remaining bandwidth
+```
+
+The screenshot contains live accumulated counters.
+
+The controlled benchmark below was recorded separately during a dedicated test run.
+
+---
+
+## 5. Controlled HQ-to-Branch Benchmark
+
+Parent result:
+
+```text
 Packets matched:      7598
 Packets transmitted:  6249
 Packets dropped:      1349
@@ -62,127 +213,164 @@ Packets dropped:      1349
 Shape rate:           800000 bps
 ```
 
-Packet accounting:
+Accounting:
 
 ```text
-7598 - 6249 = 1349 drops
+7598 - 6249 = 1349
 ```
 
 ---
 
-## Voice — EF
+## 6. Voice — EF / LLQ
+
+Controlled result:
 
 ```text
-Matched:              1515
-Transmitted:           395
-LLQ exceed drops:     1120
+Matched:             1515
+Transmitted:          395
+LLQ exceed drops:    1120
 
-Priority allocation:  20%
+Priority:              20%
 Priority rate:         160 kbps
 ```
 
-Observation:
-
-The Voice class generated more priority traffic than the LLQ allocation allowed during congestion.
-
-The strict-priority queue therefore protected the remaining classes by dropping excess priority traffic.
+Accounting:
 
 ```text
-1515 - 395 = 1120 drops
+1515 - 395 = 1120
+```
+
+The Voice class is configured with:
+
+```text
+priority percent 20
+```
+
+At an 800 kbps parent:
+
+```text
+800 kbps × 20%
+=
+160 kbps
+```
+
+The test demonstrated that LLQ provides priority treatment but does not allow unlimited EF traffic to consume the shaped link.
+
+Excess sustained priority traffic generated:
+
+```text
+b/w exceed drops
 ```
 
 ---
 
-## Video — AF41
+## 7. Video — AF41 / CBWFQ
+
+Controlled result:
 
 ```text
-Matched:              1515
-Transmitted:          1508
-Drops:                   7
+Matched:       1515
+Transmitted:   1508
+Drops:            7
 
-Bandwidth guarantee:   30%
-Minimum bandwidth:     240 kbps
+Bandwidth:       30%
+Guarantee:      240 kbps
 ```
 
-Observation:
+Important behavior:
 
-`bandwidth percent 30` is a minimum bandwidth guarantee, not a rate limit.
+```text
+bandwidth percent 30
+```
 
-The Video class was able to use additional available bandwidth and experienced very few drops.
+defines a minimum bandwidth guarantee.
+
+It is not a maximum rate.
+
+Video can use additional unused bandwidth when available.
 
 ---
 
-## Critical Data — AF31
+## 8. Critical — AF31 / CBWFQ
+
+Controlled result:
 
 ```text
-Matched:              1515
-Transmitted:          1439
-Drops:                  76
+Matched:       1515
+Transmitted:   1439
+Drops:           76
 
-Bandwidth guarantee:   25%
-Minimum bandwidth:     200 kbps
+Bandwidth:       25%
+Guarantee:      200 kbps
 ```
 
-Observation:
-
-Critical Data received its configured CBWFQ guarantee but still experienced queue pressure during the burst.
+The class received its configured scheduling guarantee while still experiencing queue pressure during congestion.
 
 ---
 
-## Bulk Data — CS1
+## 9. Bulk — CS1 / WRED
+
+Controlled result:
 
 ```text
-Matched:              1491
-Transmitted:          1491
-Drops:                   0
+Matched:       1491
+Transmitted:   1491
+Drops:            0
 
-Bandwidth guarantee:    5%
-Minimum bandwidth:      40 kbps
-
-WRED mean queue depth:   5 packets
-WRED minimum threshold: 10 packets
-WRED maximum threshold: 30 packets
-Random drops:            0
-Tail drops:              0
+Bandwidth:        5%
+Guarantee:       40 kbps
 ```
 
-Observation:
+WRED result:
 
-The Bulk class had only a 40 kbps minimum guarantee, but it transmitted all packets because bandwidth guarantees are not rate caps.
+```text
+Mean queue depth:   5 packets
 
-The class borrowed unused bandwidth.
+Minimum threshold: 10
+Maximum threshold: 30
+Mark probability:  1/10
 
-WRED did not begin dropping because the average queue depth remained below the configured minimum threshold.
+Random drops:       0
+Tail drops:         0
+```
+
+The average WRED queue depth remained below the minimum threshold.
+
+Therefore WRED did not begin probabilistic dropping.
 
 ---
 
-## Best Effort
+## 10. Best Effort
+
+Controlled result:
 
 ```text
-Matched:              1562
-Transmitted:          1416
-Drops:                 146
+Matched:       1562
+Transmitted:   1416
+Drops:          146
 ```
 
-Best Effort had no explicit bandwidth guarantee and experienced congestion after the explicitly scheduled traffic classes competed for the shaped link.
+Best Effort had no explicit bandwidth guarantee.
+
+It consumed remaining available bandwidth after the explicitly configured QoS classes competed for the shaped link.
 
 ---
 
-## Drop Accounting
+## 11. Parent / Child Drop Accounting
 
-The child-policy drops were:
+Child drops:
 
 ```text
 Voice:       1120
 Video:          7
 Critical:      76
 Bulk:           0
-Best Effort:  146
+Default:      146
 -----------------
 Total:       1349
 ```
 
-Parent shaper:
+Parent:
 
 ```text
 Total drops: 1349
@@ -191,34 +379,36 @@ Total drops: 1349
 Therefore:
 
 ```text
-Child queue drops = Parent shaper drops
+1120 + 7 + 76 + 0 + 146
+=
+1349
 ```
 
-This confirms that the congestion losses occurred inside the child QoS queues beneath the 800 kbps parent shaper.
+This confirms that the parent congestion losses can be completely accounted for by the child queues.
 
 ---
 
-# Test 2 — Branch to HQ
+# Branch to HQ Provider QoS
 
 Traffic direction:
 
 ```text
 LON-BR-CE1
-    |
-    v
+      |
+      v
 LON-PE1
-    |
-    v
+      |
+      v
 FRA-P1
-    |
-    v
+      |
+      v
 AMS-PE1
-    |
-    v
+      |
+      v
 AMS-HQ-CE1
 ```
 
-The congestion point was intentionally created on:
+The reverse provider congestion point was:
 
 ```text
 AMS-PE1 Gi0/0
@@ -230,167 +420,146 @@ Provider service rate:
 800 kbps
 ```
 
-The Branch CE parent shaper was temporarily increased so that `AMS-PE1` became the primary congestion point.
+---
+
+## 12. AMS-PE1 Reverse-Direction Provider QoS
+
+### Real Lab Evidence
+
+![AMS-PE1 Provider Egress QoS](../screenshot/ams-pe-provider-congestion-classes.png)
+
+The screenshot confirms that the reverse provider edge implements:
+
+```text
+PM-SP-HQ-EGRESS-SHAPER
+        |
+        | shape 800 kbps
+        |
+        v
+PM-SP-HQ-EGRESS-QOS
+```
+
+with:
+
+```text
+Voice     -> LLQ 20%
+Video     -> BW 30%
+Critical  -> BW 25%
+Bulk      -> BW 5% + WRED
+Default   -> Remaining BW
+```
+
+The screenshot contains current live counters.
+
+The dedicated controlled benchmark produced the results below.
 
 ---
 
-## Parent Shaper Result
+## 13. Controlled Branch-to-HQ Benchmark
+
+Parent:
 
 ```text
-Service-policy output: PM-SP-HQ-EGRESS-SHAPER
+Matched:       5592
+Transmitted:   4589
+Dropped:       1003
 
-Packets matched:      5592
-Packets transmitted:  4589
-Packets dropped:      1003
-
-Shape rate:           800000 bps
+Shape rate:    800000 bps
 ```
 
-Packet accounting:
+Accounting:
 
 ```text
-5592 - 4589 = 1003 drops
+5592 - 4589 = 1003
 ```
+
+Child results:
+
+| Class | Matched | Output | Drops |
+|---|---:|---:|---:|
+| Voice | 1111 | 286 | 825 |
+| Video | 1111 | 1105 | 6 |
+| Critical | 1111 | 1047 | 64 |
+| Bulk | 1111 | 1111 | 0 |
+| Default | 1148 | 1040 | 108 |
+
+Drop accounting:
+
+```text
+825
++ 6
++ 64
++ 0
++ 108
+=
+1003
+```
+
+Again:
+
+```text
+Child drops
+=
+Parent drops
+```
+
+The same hierarchical QoS behavior was therefore reproduced in both directions.
 
 ---
 
-## Voice — EF
+# Bandwidth Guarantee vs Rate Cap
 
-```text
-Matched:              1111
-Transmitted:           286
-LLQ exceed drops:      825
-
-Priority allocation:   20%
-Priority rate:          160 kbps
-```
-
-Observation:
-
-The reverse-direction test reproduced the same LLQ protection behavior.
-
-Excess EF traffic was dropped once the priority traffic exceeded the configured LLQ allowance during congestion.
-
----
-
-## Video — AF41
-
-```text
-Matched:              1111
-Transmitted:          1105
-Drops:                   6
-
-Bandwidth guarantee:   30%
-Minimum bandwidth:     240 kbps
-```
-
----
-
-## Critical Data — AF31
-
-```text
-Matched:              1111
-Transmitted:          1047
-Drops:                  64
-
-Bandwidth guarantee:   25%
-Minimum bandwidth:     200 kbps
-```
-
----
-
-## Bulk Data — CS1
-
-```text
-Matched:              1111
-Transmitted:          1111
-Drops:                   0
-
-Bandwidth guarantee:    5%
-Minimum bandwidth:      40 kbps
-
-WRED mean queue depth:   8 packets
-WRED minimum threshold: 10 packets
-WRED maximum threshold: 30 packets
-Random drops:            0
-Tail drops:              0
-```
-
-Observation:
-
-Again, the 40 kbps bandwidth allocation behaved as a minimum guarantee rather than a maximum rate.
-
-WRED remained inactive because the calculated average queue depth remained below the minimum threshold.
-
----
-
-## Best Effort
-
-```text
-Matched:              1148
-Transmitted:          1040
-Drops:                 108
-```
-
----
-
-## Drop Accounting
-
-```text
-Voice:        825
-Video:          6
-Critical:      64
-Bulk:           0
-Best Effort:  108
------------------
-Total:       1003
-```
-
-Parent shaper:
-
-```text
-Total drops: 1003
-```
-
-Therefore:
-
-```text
-Child queue drops = Parent shaper drops
-```
-
-The same behavior was reproduced in the opposite direction.
-
----
-
-# Bandwidth Guarantee vs Rate Cap Experiment
-
-The Bulk class was also tested using two different configurations.
-
-## Test A — Bandwidth Guarantee
+One of the most important experiments compared:
 
 ```text
 bandwidth percent 5
 ```
 
-At an 800 kbps parent:
+against:
 
 ```text
-Minimum guaranteed bandwidth = 40 kbps
+shape average 40000
 ```
-
-Observed result:
-
-```text
-1491 packets matched
-1491 packets transmitted
-0 drops
-```
-
-The class borrowed additional unused bandwidth.
 
 ---
 
-## Test B — Per-Class Shaper
+## 14. Bandwidth Guarantee Test
+
+With:
+
+```text
+bandwidth percent 5
+```
+
+and an 800 kbps parent:
+
+```text
+Minimum guarantee
+=
+40 kbps
+```
+
+Observed:
+
+```text
+1491 matched
+1491 transmitted
+0 drops
+```
+
+The class transmitted substantially more than 40 kbps when unused bandwidth was available.
+
+This proves:
+
+```text
+bandwidth percent
+!=
+rate cap
+```
+
+---
+
+## 15. Per-Class Shaper Test
 
 The Bulk class was temporarily changed to:
 
@@ -398,7 +567,7 @@ The Bulk class was temporarily changed to:
 shape average 40000
 ```
 
-Observed result:
+Observed:
 
 ```text
 303 packets matched
@@ -408,56 +577,150 @@ Observed result:
 Target shape rate: 40000 bps
 ```
 
-Packet accounting:
+Accounting:
 
 ```text
-303 - 213 = 90 drops
+303 - 213 = 90
 ```
 
-This demonstrated the important difference:
+This configuration imposed an actual average-rate limitation.
+
+---
+
+## 16. Guarantee vs Cap Summary
 
 ```text
 bandwidth percent 5
-= minimum bandwidth guarantee
-= traffic may borrow unused capacity
 ```
 
-versus:
+means:
+
+```text
+Minimum guaranteed bandwidth
++
+Ability to borrow unused capacity
+```
+
+while:
 
 ```text
 shape average 40000
-= approximately 40 kbps average rate cap
 ```
+
+means:
+
+```text
+Average traffic rate constrained to approximately 40 kbps
+```
+
+This experiment demonstrated the difference between scheduling and shaping.
+
+---
+
+# WRED Behavior
+
+The Bulk class uses:
+
+```text
+random-detect dscp-based
+```
+
+with CS1 thresholds:
+
+```text
+Minimum: 10 packets
+Maximum: 30 packets
+Probability: 1/10
+```
+
+WRED decisions are based on an exponentially weighted moving average of queue depth.
+
+Therefore:
+
+```text
+Instantaneous queue depth
+!=
+WRED average queue depth
+```
+
+Random drops begin only after the calculated average crosses the configured minimum threshold.
+
+---
+
+# AF Drop Precedence Experiment
+
+AF31 and AF33 were also tested with different WRED thresholds.
+
+The test demonstrated:
+
+```text
+AF31
+-> lower drop precedence
+
+AF33
+-> higher drop precedence
+```
+
+During congestion, AF33 experienced more aggressive dropping.
+
+This reinforced the AFxy concept:
+
+```text
+x = forwarding class
+y = drop precedence
+```
+
+Within the same AF class:
+
+```text
+AFx1
+<
+AFx2
+<
+AFx3
+```
+
+in drop precedence.
 
 ---
 
 # Key Findings
 
-The congestion tests demonstrated:
+The congestion experiments demonstrated:
 
-- LLQ provides strict-priority treatment but protects the link from excessive priority traffic.
-- `bandwidth percent` defines a minimum guarantee, not a maximum rate.
-- CBWFQ classes can borrow unused bandwidth.
-- Best Effort receives remaining capacity and can experience significant congestion.
-- WRED uses average queue depth rather than instantaneous queue depth.
-- A parent shaper creates the congestion point required for child queueing behavior to become visible.
-- Child drop counters can be reconciled exactly with parent shaper drops.
-- The same QoS behavior was successfully reproduced in both traffic directions.
+- CE traffic is classified and marked correctly.
+- Hierarchical QoS can deliberately create a controlled congestion point.
+- LLQ protects latency-sensitive Voice traffic while preventing unlimited priority traffic.
+- `bandwidth percent` provides a minimum guarantee rather than a maximum rate.
+- CBWFQ classes can borrow unused capacity.
+- Per-class shaping creates an actual rate constraint.
+- Best Effort uses remaining bandwidth.
+- WRED operates using average queue depth.
+- Parent and child drop counters can be reconciled exactly.
+- The provider QoS architecture behaves consistently in both directions.
 
 ---
 
 # Conclusion
 
-The lab successfully demonstrated end-to-end QoS behavior across an Enterprise / Service Provider topology.
+The lab validates QoS using more than configuration alone.
 
-QoS treatment was not validated only through configuration.
+Evidence includes:
 
-It was verified using:
+```text
+Real IOSv policy counters
++
+Queue statistics
++
+LLQ exceed drops
++
+WRED statistics
++
+Parent/child drop accounting
++
+Bidirectional testing
++
+Wireshark packet captures
+```
 
-- IP SLA traffic generation
-- MQC counters
-- Queue statistics
-- LLQ drop counters
-- WRED statistics
-- Parent/child drop accounting
-- Bidirectional congestion testing
+The result is a reproducible end-to-end QoS implementation across an Enterprise and Service Provider topology.
