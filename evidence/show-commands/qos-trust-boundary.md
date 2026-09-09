@@ -354,7 +354,7 @@ Raw capture:
 
 The same flow was captured again after it had crossed the provider network.
 
-![Spoofed EF After Trust Boundary](../screenshots/spoofed-ef-after-trust-boundary.png)
+![Spoofed EF After Trust Boundary](../screenshot/spoofed-ef-after-trust-boundary.png)
 
 Observed:
 
